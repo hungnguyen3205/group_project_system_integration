@@ -26,6 +26,27 @@ services:
       - PYTHONUNBUFFERED=1
     restart: always
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: noah_rabbitmq
+    ports:
+      - "5672:5672"   # Cổng để code gửi tin nhắn
+      - "15672:15672" # Giao diện quản lý (truy cập: localhost:15672)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  order_api:
+    build: ./module2_order_api
+    container_name: order_api_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./module2_order_api:/app
+    depends_on:
+      - mysql
+      - rabbitmq
+      
 # QUAN TRỌNG: Bạn thiếu phần này dẫn đến lỗi "undefined volume"
 volumes:
   mysql_data:
