@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: noah_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: your_password
+      MYSQL_DATABASE: noah_retail
+    volumes:
+      # Nạp dữ liệu mẫu init.sql (20,000 đơn hàng) 
+      - ./infrastructure/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  legacy_sync:
+    build: ./module1_legacy_sync
+    container_name: legacy_sync_service
+    volumes:
+      # Kết nối file inventory.csv vào module [cite: 32]
+      - ./data:/app/data
+    depends_on:
+      - mysql
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
+
+# QUAN TRỌNG: Bạn thiếu phần này dẫn đến lỗi "undefined volume"
+volumes:
+  mysql_data:
