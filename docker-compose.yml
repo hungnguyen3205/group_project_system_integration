@@ -46,7 +46,32 @@ services:
     depends_on:
       - mysql
       - rabbitmq
-      
+
+  postgres:
+    image: postgres:15
+    container_name: noah_postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password
+      POSTGRES_DB: finance_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  worker_service:
+    build: ./module3_worker
+    container_name: worker_service
+    volumes:
+      - ./module3_worker:/app
+    depends_on:
+      - rabbitmq
+      - postgres
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
+
 # QUAN TRỌNG: Bạn thiếu phần này dẫn đến lỗi "undefined volume"
 volumes:
   mysql_data:
+  postgres_data:
