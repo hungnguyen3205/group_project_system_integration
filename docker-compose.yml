@@ -8,7 +8,6 @@ services:
       MYSQL_ROOT_PASSWORD: your_password
       MYSQL_DATABASE: noah_retail
     volumes:
-      # Nạp dữ liệu mẫu init.sql (20,000 đơn hàng) 
       - ./infrastructure/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_data:/var/lib/mysql
     ports:
@@ -18,7 +17,6 @@ services:
     build: ./module1_legacy_sync
     container_name: legacy_sync_service
     volumes:
-      # Kết nối file inventory.csv vào module [cite: 32]
       - ./data:/app/data
     depends_on:
       - mysql
@@ -30,8 +28,8 @@ services:
     image: rabbitmq:3-management
     container_name: noah_rabbitmq
     ports:
-      - "5672:5672"   # Cổng để code gửi tin nhắn
-      - "15672:15672" # Giao diện quản lý (truy cập: localhost:15672)
+      - "5672:5672"   
+      - "15672:15672" 
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -82,7 +80,6 @@ services:
       - mysql
       - postgres
 
-# QUAN TRỌNG: Bạn thiếu phần này dẫn đến lỗi "undefined volume"
 volumes:
   mysql_data:
   postgres_data:

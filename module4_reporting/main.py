@@ -5,7 +5,6 @@ from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
-# Cấu hình khớp với Docker-Compose của bạn
 MYSQL_CONFIG = {
     "host": "mysql",
     "user": "root",
@@ -18,7 +17,6 @@ POSTGRES_CONFIG = "host=postgres dbname=finance_db user=admin password=admin_pas
 @app.route("/report", methods=["GET"])
 def report():
     try:
-        # 1. Lấy dữ liệu từ MySQL (Tổng quan)
         conn_mysql = mysql.connector.connect(**MYSQL_CONFIG)
         cursor_mysql = conn_mysql.cursor(dictionary=True)
         
@@ -31,7 +29,6 @@ def report():
         cursor_mysql.close()
         conn_mysql.close()
 
-        # 2. Lấy dữ liệu từ Postgres (Kiểm tra xem Worker đã xử lý bao nhiêu)
         conn_pg = psycopg2.connect(POSTGRES_CONFIG)
         cur_pg = conn_pg.cursor()
         cur_pg.execute("SELECT COUNT(*) FROM transactions")
@@ -55,5 +52,4 @@ def report():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Port 5001 như trong file kong.yml bạn gửi
     app.run(host="0.0.0.0", port=5001)

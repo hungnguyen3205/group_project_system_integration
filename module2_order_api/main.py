@@ -5,11 +5,10 @@ import json
 
 app = FastAPI()
 
-# Cấu hình kết nối
 DB_CONFIG = {
     'host': 'mysql',
-    'user': 'root',        # Sửa từ 'guest' thành 'root'
-    'password': 'your_password', # Sửa từ 'guest' thành 'your_password'
+    'user': 'root',        
+    'password': 'your_password', 
     'database': 'noah_retail'
 }
 
@@ -25,7 +24,7 @@ def send_to_queue(order_data):
             exchange='',
             routing_key='order_queue',
             body=json.dumps(order_data),
-            properties=pika.BasicProperties(delivery_mode=2) # Đảm bảo tin nhắn không mất khi RabbitMQ crash
+            properties=pika.BasicProperties(delivery_mode=2) 
         )
         connection.close()
     except Exception as e:
@@ -33,14 +32,12 @@ def send_to_queue(order_data):
 
 @app.post("/api/orders")
 async def create_order(order: dict):
-    # 1. Kiểm tra dữ liệu đầu vào (Validation)
     p_id = order.get("product_id")
     qty = order.get("quantity")
     
     if not p_id or not qty:
         raise HTTPException(status_code=400, detail="Thiếu thông tin đơn hàng")
 
-    # 2. Lưu vào MySQL
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
@@ -52,7 +49,6 @@ async def create_order(order: dict):
         order_id = cursor.lastrowid
         conn.commit()
         
-        # 3. Gửi tin nhắn sang Module 3 qua RabbitMQ
         order_msg = {"order_id": order_id, "product_id": p_id, "quantity": qty}
         send_to_queue(order_msg)
         
