@@ -2,11 +2,12 @@ import pika
 import psycopg2
 import json
 import time
-import threading # Cần thiết để chạy song song Web và Worker
+import threading
+import pymongo # Thêm thư viện MongoDB
+from datetime import datetime
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 
-# --- CẤU HÌNH ---
 PG_CONFIG = {
     "host": "postgres",
     "database": "finance_db",
@@ -14,10 +15,30 @@ PG_CONFIG = {
     "password": "admin_password"
 }
 
-# --- PHẦN 1: LOGIC WORKER (XỬ LÝ NGẦM) ---
+try:
+    mongo_client = pymongo.MongoClient("mongodb://mongodb:27017/", serverSelectionTimeoutMS=5000)
+    db = mongo_client["noah_audit"]
+    audit_collection = db["logs"]
+except Exception as e:
+    print(f" [!] Cảnh báo: Không thể kết nối MongoDB: {e}")
+
+def save_to_audit_log(data, status):
+    """Ghi log giao dịch vào MongoDB"""
+    try:
+        log_entry = {
+            "order_id": data.get('order_id'),
+            "status": status,
+            "timestamp": datetime.utcnow(),
+            "payload": data,
+            "module": "worker_module_3"
+        }
+        audit_collection.insert_one(log_entry)
+        print(f" [M] Đã ghi Audit Log cho đơn hàng {data.get('order_id')}")
+    except Exception as e:
+        print(f" [!] Lỗi ghi log MongoDB: {e}")
 
 def save_to_postgres(data):
-    """Lưu đơn hàng vào Postgres với cơ chế Retry liên tục"""
+    """Lưu đơn hàng vào Postgres với cơ chế Retry"""
     while True:
         try:
             conn = psycopg2.connect(**PG_CONFIG)
@@ -39,18 +60,22 @@ def save_to_postgres(data):
             conn.commit()
             cur.close()
             conn.close()
-            print(f" [v] Đã lưu đơn hàng {data['order_id']} vào Postgres thành công!")
             return True 
         except Exception as e:
-            print(f" [!] Postgres chưa sẵn sàng, đang thử lại sau 5s... ({e})")
+            print(f" [!] Postgres chưa sẵn sàng, đang thử lại... ({e})")
             time.sleep(5)
 
 def callback(ch, method, properties, body):
     try:
         order_data = json.loads(body)
         print(f" [!] Đang xử lý đơn hàng: {order_data}")
+        
         if save_to_postgres(order_data):
+            # 2. Lưu Audit Log vào MongoDB sau khi thành công
+            save_to_audit_log(order_data, "SUCCESS")
             ch.basic_ack(delivery_tag=method.delivery_tag)
+            print(f" [v] Đã xử lý xong đơn hàng {order_data['order_id']}")
+            
     except Exception as e:
         print(f" [x] Lỗi xử lý tin nhắn: {e}")
 
@@ -75,27 +100,18 @@ def start_rabbitmq_worker():
     print(' [*] Worker đã sẵn sàng! Đang đợi đơn hàng...')
     channel.start_consuming()
 
-# --- PHẦN 2: LOGIC WEB SERVER (HIỂN THỊ GIAO DIỆN VUE) ---
-
 app = Flask(__name__, static_folder='static')
-CORS(app) # Cho phép gọi API từ bên ngoài nếu cần
+CORS(app)
 
 @app.route('/')
 def serve_vue():
-    """Trả về file index.vue khi truy cập localhost:5002"""
-    # Lưu ý: Trình duyệt sẽ đọc .vue như một file text/plain nếu không có loader. 
-    # Nhưng theo yêu cầu của bạn, Flask sẽ gửi file này đi.
     return send_from_directory('static', 'index.html')
 
-# --- PHẦN 3: KHỞI CHẠY ĐA LUỒNG ---
 
 if __name__ == "__main__":
-    # 1. Chạy Worker RabbitMQ trong một luồng riêng (Background Thread)
     worker_thread = threading.Thread(target=start_rabbitmq_worker)
-    worker_thread.daemon = True # Tự tắt khi main thread tắt
+    worker_thread.daemon = True 
     worker_thread.start()
 
-    # 2. Chạy Flask Web Server ở luồng chính (Main Thread)
-    # Port 5002 như đã thống nhất cho Dashboard Module 3
     print(" [Web] Dashboard đang chạy tại http://localhost:5002")
     app.run(host='0.0.0.0', port=5002, debug=False, use_reloader=False)

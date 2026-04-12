@@ -90,6 +90,15 @@ services:
       - PYTHONUNBUFFERED=1
     restart: always
 
+  mongodb:
+    image: mongo:latest
+    container_name: noah_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
 volumes:
   mysql_data:
   postgres_data:
+  mongo_data:
