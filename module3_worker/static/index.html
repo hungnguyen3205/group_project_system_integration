@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noah Finance | Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .code-font { font-family: 'JetBrains Mono', monospace; }
+        .glass-card { 
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .status-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="min-h-screen p-6 lg:p-12">
+        <header class="mb-10 flex justify-between items-end">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-white mb-2">
+                    <span class="text-blue-500">NOAH</span>_FINANCE <span class="text-sm font-mono text-slate-500 font-normal">v1.0.4</span>
+                </h1>
+                <p class="text-slate-400 code-font text-sm">> System monitoring terminal initialized...</p>
+            </div>
+            <div class="flex items-center space-x-2 bg-slate-800/50 px-4 py-2 rounded-full border border-slate-700">
+                <div class="w-2 h-2 rounded-full bg-green-500 status-pulse"></div>
+                <span class="text-xs code-font text-green-500">LIVE_SYNCING</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="glass-card p-6 rounded-2xl">
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Total Orders (MySQL)</p>
+                <h2 class="text-4xl font-bold code-font text-blue-400">{{ stats.mysql_data?.total_orders || 0 }}</h2>
+                <div class="mt-4 text-xs text-slate-500 uppercase">Module 2 Inbound</div>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl border-l-4 border-l-green-500">
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Processed (Postgres)</p>
+                <h2 class="text-4xl font-bold code-font text-green-400">{{ stats.postgres_data?.processed_orders_in_finance || 0 }}</h2>
+                <div class="mt-4 text-xs text-slate-500 uppercase">Module 3 Worker Success</div>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl">
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Revenue</p>
+                <h2 class="text-4xl font-bold code-font text-purple-400">${{ formatRevenue(stats.mysql_data?.total_revenue) }}</h2>
+                <div class="mt-4 text-xs text-slate-500 uppercase text-right">System Health: <span class="text-slate-300">{{ stats.system_health }}</span></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="glass-card p-8 rounded-2xl">
+                <h3 class="text-lg font-semibold mb-6 flex items-center">
+                    <span class="mr-2 opacity-50">#</span> Data Synchronization Flow
+                </h3>
+                <div class="h-64">
+                    <canvas id="syncChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card p-8 rounded-2xl overflow-hidden">
+                <h3 class="text-lg font-semibold mb-6 flex items-center">
+                    <span class="mr-2 opacity-50">#</span> Real-time Logs
+                </h3>
+                <div class="space-y-3 code-font text-xs overflow-y-auto max-h-64">
+                    <div v-for="i in 5" :key="i" class="flex space-x-3 opacity-60">
+                        <span class="text-slate-600">[{{ new Date().toLocaleTimeString() }}]</span>
+                        <span class="text-blue-400">INFO</span>
+                        <span>Worker node active, listening to <span class="text-yellow-500">order_queue</span>...</span>
+                    </div>
+                    <div class="flex space-x-3 text-green-400">
+                        <span class="text-slate-600">[{{ new Date().toLocaleTimeString() }}]</span>
+                        <span>SUCCESS</span>
+                        <span>Dashboard bridge established on port 5002</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    stats: {},
+                    chart: null,
+                    apiUrl: 'http://localhost:5001/report'
+                }
+            },
+            mounted() {
+                this.initChart();
+                this.fetchData();
+                setInterval(this.fetchData, 3000);
+            },
+            methods: {
+                formatRevenue(val) {
+                    if (!val) return "0.00";
+                    return parseFloat(val).toLocaleString();
+                },
+                async fetchData() {
+                    try {
+                        const response = await fetch('http://localhost:5001/report', { mode: 'cors' });
+                        const data = await response.json();
+                        this.stats = data;
+                        this.updateChart(data);
+                    } catch (error) {
+                        console.error("Connection lost to Module 4 API");
+                    }
+                },
+                initChart() {
+                    const ctx = document.getElementById('syncChart').getContext('2d');
+                    this.chart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['ORDERS (MYSQL)', 'SYNCED (POSTGRES)'],
+                            datasets: [{
+                                label: 'Records',
+                                data: [0, 0],
+                                backgroundColor: ['#3b82f6', '#22c55e'],
+                                borderRadius: 8,
+                                barThickness: 40
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+                                x: { grid: { display: false }, ticks: { color: '#64748b' } }
+                            }
+                        }
+                    });
+                },
+                updateChart(data) {
+                    if (this.chart) {
+                        this.chart.data.datasets[0].data = [
+                            data.mysql_data.total_orders, 
+                            data.postgres_data.processed_orders_in_finance
+                        ];
+                        this.chart.update('none'); 
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

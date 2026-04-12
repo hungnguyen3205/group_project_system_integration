@@ -2,14 +2,19 @@ import pika
 import psycopg2
 import json
 import time
-import os
+import threading # Cần thiết để chạy song song Web và Worker
+from flask import Flask, send_from_directory
+from flask_cors import CORS
 
+# --- CẤU HÌNH ---
 PG_CONFIG = {
     "host": "postgres",
     "database": "finance_db",
     "user": "admin",
     "password": "admin_password"
 }
+
+# --- PHẦN 1: LOGIC WORKER (XỬ LÝ NGẦM) ---
 
 def save_to_postgres(data):
     """Lưu đơn hàng vào Postgres với cơ chế Retry liên tục"""
@@ -41,17 +46,16 @@ def save_to_postgres(data):
             time.sleep(5)
 
 def callback(ch, method, properties, body):
-    """Hàm xử lý khi lấy được tin nhắn từ Queue"""
     try:
         order_data = json.loads(body)
         print(f" [!] Đang xử lý đơn hàng: {order_data}")
-        
         if save_to_postgres(order_data):
             ch.basic_ack(delivery_tag=method.delivery_tag)
     except Exception as e:
         print(f" [x] Lỗi xử lý tin nhắn: {e}")
 
-def start_worker():
+def start_rabbitmq_worker():
+    """Hàm chạy RabbitMQ Consumer"""
     print(' [*] Đang kết nối tới RabbitMQ...')
     while True:
         try:
@@ -64,15 +68,34 @@ def start_worker():
             time.sleep(5)
 
     channel = connection.channel()
-    
     channel.queue_declare(queue='order_queue', durable=True)
-    
     channel.basic_qos(prefetch_count=1)
-    
     channel.basic_consume(queue='order_queue', on_message_callback=callback)
     
-    print(' [*] Worker đã sẵn sàng! Đang đợi đơn hàng từ Module 2...')
+    print(' [*] Worker đã sẵn sàng! Đang đợi đơn hàng...')
     channel.start_consuming()
 
+# --- PHẦN 2: LOGIC WEB SERVER (HIỂN THỊ GIAO DIỆN VUE) ---
+
+app = Flask(__name__, static_folder='static')
+CORS(app) # Cho phép gọi API từ bên ngoài nếu cần
+
+@app.route('/')
+def serve_vue():
+    """Trả về file index.vue khi truy cập localhost:5002"""
+    # Lưu ý: Trình duyệt sẽ đọc .vue như một file text/plain nếu không có loader. 
+    # Nhưng theo yêu cầu của bạn, Flask sẽ gửi file này đi.
+    return send_from_directory('static', 'index.html')
+
+# --- PHẦN 3: KHỞI CHẠY ĐA LUỒNG ---
+
 if __name__ == "__main__":
-    start_worker()
+    # 1. Chạy Worker RabbitMQ trong một luồng riêng (Background Thread)
+    worker_thread = threading.Thread(target=start_rabbitmq_worker)
+    worker_thread.daemon = True # Tự tắt khi main thread tắt
+    worker_thread.start()
+
+    # 2. Chạy Flask Web Server ở luồng chính (Main Thread)
+    # Port 5002 như đã thống nhất cho Dashboard Module 3
+    print(" [Web] Dashboard đang chạy tại http://localhost:5002")
+    app.run(host='0.0.0.0', port=5002, debug=False, use_reloader=False)

@@ -12,16 +12,6 @@ services:
       - mysql_data:/var/lib/mysql
     ports:
       - "3306:3306"
-
-  legacy_sync:
-    build: ./module1_legacy_sync
-    container_name: legacy_sync_service
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      - mysql
-    environment:
-      - PYTHONUNBUFFERED=1
     restart: always
 
   rabbitmq:
@@ -33,17 +23,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-
-  order_api:
-    build: ./module2_order_api
-    container_name: order_api_service
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./module2_order_api:/app
-    depends_on:
-      - mysql
-      - rabbitmq
+    restart: always
 
   postgres:
     image: postgres:15
@@ -56,10 +36,37 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  legacy_sync:
+    build: ./module1_legacy_sync
+    container_name: legacy_sync_service
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - mysql
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
+
+  order_api:
+    build: ./module2_order_api
+    container_name: order_api_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./module2_order_api:/app
+    depends_on:
+      - mysql
+      - rabbitmq
+    environment:
+      - PYTHONUNBUFFERED=1
 
   worker_service:
     build: ./module3_worker
     container_name: worker_service
+    ports:
+      - "5002:5002"
     volumes:
       - ./module3_worker:/app
     depends_on:
@@ -73,12 +80,15 @@ services:
     build: ./module4_reporting
     container_name: report_api_service
     ports:
-      - "5001:5001"  
+      - "5001:5001"
     volumes:
-      - ./module4_reporting:/app
+      - ./module4_reporting:/app # Thêm dòng này để sync code nhanh
     depends_on:
       - mysql
       - postgres
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
 
 volumes:
   mysql_data:
