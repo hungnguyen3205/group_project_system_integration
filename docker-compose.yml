@@ -71,6 +71,17 @@ services:
       - PYTHONUNBUFFERED=1
     restart: always
 
+  report_service:
+    build: ./module4_reporting
+    container_name: report_api_service
+    ports:
+      - "5001:5001"  
+    volumes:
+      - ./module4_reporting:/app
+    depends_on:
+      - mysql
+      - postgres
+
 # QUAN TRỌNG: Bạn thiếu phần này dẫn đến lỗi "undefined volume"
 volumes:
   mysql_data:
