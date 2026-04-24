@@ -14,16 +14,12 @@
         .code-font { font-family: 'JetBrains Mono', monospace; }
         .glass-card { 
             background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .status-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -31,129 +27,260 @@
         <header class="mb-10 flex justify-between items-end">
             <div>
                 <h1 class="text-3xl font-bold tracking-tight text-white mb-2">
-                    <span class="text-blue-500">NOAH</span>_FINANCE <span class="text-sm font-mono text-slate-500 font-normal">v1.0.4</span>
+                    <span class="text-blue-500">NOAH</span>_FINANCE <span class="text-sm font-mono text-slate-500 font-normal">v1.0.5</span>
                 </h1>
                 <p class="text-slate-400 code-font text-sm">> System monitoring terminal initialized...</p>
             </div>
-            <div class="flex items-center space-x-2 bg-slate-800/50 px-4 py-2 rounded-full border border-slate-700">
-                <div class="w-2 h-2 rounded-full bg-green-500 status-pulse"></div>
-                <span class="text-xs code-font text-green-500">LIVE_SYNCING</span>
+            <div class="flex items-center space-x-4">
+                <button @click="showModal = true" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg shadow-blue-900/20">
+                    Xem danh sách đơn hàng
+                </button>
+                <div class="flex items-center space-x-2 bg-slate-800/50 px-4 py-2 rounded-full border border-slate-700">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span class="text-xs code-font text-green-500">LIVE_SYNCING</span>
+                </div>
             </div>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <div class="glass-card p-6 rounded-2xl">
-                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Total Orders (MySQL)</p>
-                <h2 class="text-4xl font-bold code-font text-blue-400">{{ stats.mysql_data?.total_orders || 0 }}</h2>
-                <div class="mt-4 text-xs text-slate-500 uppercase">Module 2 Inbound</div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Total Unique Items (MySQL)</p>
+                <h2 class="text-4xl font-bold code-font text-blue-400">{{ cleanOrders.length || 0 }}</h2>
             </div>
-
             <div class="glass-card p-6 rounded-2xl border-l-4 border-l-green-500">
                 <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Processed (Postgres)</p>
                 <h2 class="text-4xl font-bold code-font text-green-400">{{ stats.postgres_data?.processed_orders_in_finance || 0 }}</h2>
-                <div class="mt-4 text-xs text-slate-500 uppercase">Module 3 Worker Success</div>
             </div>
-
             <div class="glass-card p-6 rounded-2xl">
                 <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Revenue</p>
                 <h2 class="text-4xl font-bold code-font text-purple-400">${{ formatRevenue(stats.mysql_data?.total_revenue) }}</h2>
-                <div class="mt-4 text-xs text-slate-500 uppercase text-right">System Health: <span class="text-slate-300">{{ stats.system_health }}</span></div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div class="glass-card p-8 rounded-2xl">
                 <h3 class="text-lg font-semibold mb-6 flex items-center">
-                    <span class="mr-2 opacity-50">#</span> Data Synchronization Flow
+                    <span class="mr-2 text-blue-500">#</span> Data Flow Statistics
                 </h3>
                 <div class="h-64">
                     <canvas id="syncChart"></canvas>
                 </div>
             </div>
 
-            <div class="glass-card p-8 rounded-2xl overflow-hidden">
-                <h3 class="text-lg font-semibold mb-6 flex items-center">
-                    <span class="mr-2 opacity-50">#</span> Real-time Logs
+            <div class="glass-card p-8 rounded-2xl overflow-hidden flex flex-col">
+                <h3 class="text-lg font-semibold mb-6 flex items-center justify-between">
+                    <span><span class="mr-2 text-green-500">#</span> Real-time Logs</span>
+                    <span class="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-500 code-font">AUTO_UPDATE</span>
                 </h3>
-                <div class="space-y-3 code-font text-xs overflow-y-auto max-h-64">
-                    <div v-for="i in 5" :key="i" class="flex space-x-3 opacity-60">
-                        <span class="text-slate-600">[{{ new Date().toLocaleTimeString() }}]</span>
-                        <span class="text-blue-400">INFO</span>
-                        <span>Worker node active, listening to <span class="text-yellow-500">order_queue</span>...</span>
+                
+                <div id="logContainer" class="space-y-3 code-font text-xs overflow-y-auto flex-1 max-h-64 pr-2">
+                    <div v-if="dirtyDataCount > 0" class="p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 font-bold mb-4">
+                        [ALERT] System filtered & merged {{ dirtyDataCount }} redundant/dirty records.
                     </div>
-                    <div class="flex space-x-3 text-green-400">
-                        <span class="text-slate-600">[{{ new Date().toLocaleTimeString() }}]</span>
-                        <span>SUCCESS</span>
-                        <span>Dashboard bridge established on port 5002</span>
+                    
+                    <div v-for="(log, index) in systemLogs" :key="index" 
+                        class="group flex items-center space-x-3 py-1.5 px-3 rounded hover:bg-slate-800/50 transition-all border-l-2"
+                        :class="getLogBorderColor(log.type)">
+                        
+                        <span class="text-slate-500 font-medium whitespace-nowrap">[{{ log.time }}]</span>
+
+                        <span :class="getBadgeClass(log.type)" 
+                            class="px-2 py-0.5 rounded text-[10px] font-bold min-w-[65px] text-center uppercase tracking-tighter">
+                            {{ log.type }}
+                        </span>
+
+                        <span class="text-slate-300 flex-1 leading-relaxed">{{ log.msg }}</span>
+                        
+                        <div class="w-1.5 h-1.5 rounded-full" :class="getDotColor(log.type)"></div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+            <div class="glass-card w-full max-w-4xl max-h-[80vh] overflow-hidden rounded-3xl flex flex-col shadow-2xl">
+                <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                    <h3 class="text-xl font-bold uppercase tracking-widest text-blue-400">Inventory Data (Aggregated)</h3>
+                    <button @click="showModal = false" class="text-slate-400 hover:text-white text-2xl transition">&times;</button>
+                </div>
+                <div class="overflow-y-auto p-0 bg-slate-900/50">
+                    <table class="w-full text-left code-font text-sm">
+                        <thead class="bg-slate-800 text-slate-500 sticky top-0 border-b border-slate-700">
+                            <tr>
+                                <th class="p-4">Product ID</th>
+                                <th class="p-4">Aggregated Quantity</th>
+                                <th class="p-4 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700/50">
+                            <tr v-for="order in cleanOrders" :key="order.product_id" class="hover:bg-blue-500/5 transition">
+                                <td class="p-4 text-blue-300 font-bold">{{ order.product_id }}</td>
+                                <td class="p-4 text-green-400">{{ order.quantity.toLocaleString() }}</td>
+                                <td class="p-4 text-center">
+                                    <span class="bg-green-500/10 text-green-500 px-2 py-1 rounded text-[10px] border border-green-500/20">SYNCED</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const { createApp } = Vue;
+        const { createApp, markRaw } = Vue;
 
         createApp({
             data() {
                 return {
-                    stats: {},
+                    apiUrl: 'https://34e25143c89420.lhr.life/report',
+                    stats: { mysql_data: { orders_list: [] } },
                     chart: null,
-                    apiUrl: 'http://localhost:5001/report'
+                    showModal: false,
+                    dirtyDataCount: 0,
+                    systemLogs: [],
+                    lastProcessedCount: 0
+                }
+            },
+            computed: {
+                cleanOrders() {
+                    const allOrders = this.stats.mysql_data?.orders_list || [];
+                    const grouped = {};
+                    allOrders.forEach(o => {
+                        if (o.product_id > 0 && o.quantity > 0) {
+                            if (grouped[o.product_id]) {
+                                grouped[o.product_id].quantity += o.quantity;
+                            } else {
+                                grouped[o.product_id] = { ...o };
+                            }
+                        }
+                    });
+                    const result = Object.values(grouped);
+                    this.dirtyDataCount = allOrders.length - result.length; 
+                    return result;
                 }
             },
             mounted() {
                 this.initChart();
                 this.fetchData();
+                this.addLog('INFO', 'Dashboard bridge established on port 5002');
                 setInterval(this.fetchData, 3000);
             },
             methods: {
+                getLogBorderColor(type) {
+                switch (type) {
+                    case 'SUCCESS': return 'border-green-500/50';
+                    case 'ERROR': return 'border-red-500/50';
+                    case 'INFO': return 'border-blue-500/50';
+                    default: return 'border-slate-700';
+                }
+            },
+            // Màu cho nhãn (Badge)
+            getBadgeClass(type) {
+                switch (type) {
+                    case 'SUCCESS': return 'bg-green-500/10 text-green-400 border border-green-500/20';
+                    case 'ERROR': return 'bg-red-500/10 text-red-400 border border-red-500/20';
+                    case 'INFO': return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
+                    default: return 'bg-slate-700 text-slate-300';
+                }
+            },
+            // Màu chấm tròn nhỏ cuối dòng
+            getDotColor(type) {
+                switch (type) {
+                    case 'SUCCESS': return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]';
+                    case 'ERROR': return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]';
+                    case 'INFO': return 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]';
+                    default: return 'bg-slate-500';
+                }
+            },
+                addLog(type, msg) {
+                    const now = new Date().toLocaleTimeString();
+                    this.systemLogs.unshift({ time: now, type, msg });
+                    if (this.systemLogs.length > 20) this.systemLogs.pop();
+                },
                 formatRevenue(val) {
                     if (!val) return "0.00";
                     return parseFloat(val).toLocaleString();
                 },
                 async fetchData() {
                     try {
-                        const response = await fetch('http://localhost:5001/report', { mode: 'cors' });
+                        const response = await fetch(this.apiUrl, {
+                            headers: {
+                                "bypass-tunnel-reminder": "true" // Header để vượt qua cảnh báo của lhr.life
+                            }
+                        });
                         const data = await response.json();
+                        
+                        // Kiểm tra nếu có dữ liệu mới xử lý bên Postgres thì thêm log
+                        const currentProcessed = data.postgres_data?.processed_orders_in_finance || 0;
+                        if (currentProcessed !== this.lastProcessedCount) {
+                            this.addLog('SUCCESS', `Module 3 synced ${currentProcessed} records to Postgres`);
+                            this.lastProcessedCount = currentProcessed;
+                        }
+
                         this.stats = data;
-                        this.updateChart(data);
+                        this.updateChart();
                     } catch (error) {
-                        console.error("Connection lost to Module 4 API");
+                        if (this.systemLogs[0]?.type !== 'ERROR') {
+                            this.addLog('ERROR', 'Connection lost to Module 4 API');
+                        }
                     }
                 },
                 initChart() {
                     const ctx = document.getElementById('syncChart').getContext('2d');
-                    this.chart = new Chart(ctx, {
+                    
+                    // Khởi tạo chart vào một biến tạm
+                    const chartInstance = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: ['ORDERS (MYSQL)', 'SYNCED (POSTGRES)'],
+                            labels: ['ORDERS (AGGREGATED)', 'SYNCED (POSTGRES)'],
                             datasets: [{
-                                label: 'Records',
+                                label: 'Total Records',
                                 data: [0, 0],
                                 backgroundColor: ['#3b82f6', '#22c55e'],
                                 borderRadius: 8,
-                                barThickness: 40
+                                barThickness: 45
                             }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
+                            // Cấu hình font chuẩn để tránh Chart.js tự tìm kiếm gây lỗi
+                            font: { family: "'Inter', sans-serif" }, 
+                            plugins: { 
+                                legend: { display: false },
+                                tooltip: { enabled: true } 
+                            },
                             scales: {
-                                y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
-                                x: { grid: { display: false }, ticks: { color: '#64748b' } }
+                                y: { 
+                                    beginAtZero: true,
+                                    grid: { color: '#1e293b' }, 
+                                    ticks: { color: '#64748b', stepSize: 1 } 
+                                },
+                                x: { 
+                                    grid: { display: false }, 
+                                    ticks: { color: '#64748b' } 
+                                }
                             }
                         }
                     });
+
+                    // QUAN TRỌNG: Dùng markRaw ở đây để fix lỗi "reading includes"
+                    this.chart = markRaw(chartInstance);
                 },
-                updateChart(data) {
+                updateChart() {
                     if (this.chart) {
-                        this.chart.data.datasets[0].data = [
-                            data.mysql_data.total_orders, 
-                            data.postgres_data.processed_orders_in_finance
-                        ];
-                        this.chart.update('none'); 
+                        const mysqlCount = this.cleanOrders ? this.cleanOrders.length : 0;
+                        const pgCount = this.stats.postgres_data?.processed_orders_in_finance || 0;
+
+                        // Cập nhật mảng data mới
+                        this.chart.data.datasets[0].data = [mysqlCount, pgCount];
+                        
+                        // Cập nhật giới hạn trục Y
+                        this.chart.options.scales.y.suggestedMax = Math.max(mysqlCount, pgCount) + 5;
+                        
+                        // Vẽ lại
+                        this.chart.update();
                     }
                 }
             }
