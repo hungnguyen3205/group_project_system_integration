@@ -67,24 +67,36 @@ async def create_order(order: dict):
         if 'conn' in locals() and conn.is_connected():
             conn.close()
 
-# THÊM ĐOẠN NÀY VÀO MODULE 2
 @app.delete("/api/orders/{product_id}")
 async def delete_order(product_id: int):
+    conn_mysql = None
+    conn_pg = None # Khởi tạo biến để tránh lỗi
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor()
+        # --- 1. XÓA BÊN MYSQL ---
+        conn_mysql = mysql.connector.connect(**DB_CONFIG)
+        cursor_ms = conn_mysql.cursor()
+        cursor_ms.execute("DELETE FROM orders WHERE product_id = %s", (product_id,))
+        conn_mysql.commit()
         
-        # Lệnh xóa tất cả đơn hàng của sản phẩm đó
-        query = "DELETE FROM orders WHERE product_id = %s"
-        cursor.execute(query, (product_id,))
-        conn.commit()
+        # --- 2. XÓA BÊN POSTGRES ---
+        import psycopg2 # Đảm bảo đã import thư viện này
+        # Nhớ thay đổi thông tin admin/password cho đúng với máy bạn
+        conn_pg = psycopg2.connect("host=postgres dbname=finance_db user=admin password=admin_password")
+        cursor_pg = conn_pg.cursor() # TẠO BIẾN cursor_pg Ở ĐÂY
+        cursor_pg.execute("DELETE FROM transactions WHERE product_id = %s", (product_id,))
+        conn_pg.commit()
         
-        return {"message": f"Đã xóa toàn bộ đơn hàng của sản phẩm {product_id}"}
+        return {"message": f"Đã xóa sản phẩm {product_id} ở cả 2 database thành công!"}
+
     except Exception as e:
+        print(f"Lỗi: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
+        # Đóng kết nối an toàn
+        if conn_mysql and conn_mysql.is_connected():
+            conn_mysql.close()
+        if conn_pg:
+            conn_pg.close()
             
 # SỬA LẠI CÁCH CHẠY CHO ĐÚNG FASTAPI
 if __name__ == "__main__":

@@ -57,7 +57,7 @@ def report():
         # --- 2. KẾT NỐI VÀ LẤY DỮ LIỆU POSTGRES ---
         conn_pg = psycopg2.connect(POSTGRES_CONFIG)
         cur_pg = conn_pg.cursor()
-        cur_pg.execute("SELECT COUNT(*) FROM transactions")
+        cur_pg.execute("SELECT COUNT(*) FROM transactions WHERE status != 'DELETED'")
         processed_orders = cur_pg.fetchone()[0]
         cur_pg.close()
 
